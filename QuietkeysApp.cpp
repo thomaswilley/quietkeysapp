@@ -6,9 +6,15 @@
 #include <shellapi.h>
 #include <stdio.h>
 #include <strsafe.h>
+#include <windows.h>
+#include <mmdeviceapi.h>
+#include <endpointvolume.h>
+#include <Functiondiscoverykeys_devpkey.h>
 
-#define MAX_LOADSTRING 100
-#define APPWM_ICONNOTIFY (WM_APP + 1)
+#define MAX_LOADSTRING      100
+#define APPWM_ICONNOTIFY    (WM_APP + 1)
+#define APPWM_MICMUTED      (WM_APP + 2)
+#define APPWM_MICUNMUTED    (WM_APP + 3)
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
@@ -22,6 +28,105 @@ namespace gQuietKeys {
     HICON hIcon_mic_mute;
     HICON hIcon_mic_mute_fill;
     NOTIFYICONDATA nid;
+    HHOOK hookKeyboard;
+    wchar_t* defaultMicFriendlyName = NULL;
+    IAudioEndpointVolume* defaultMicVolume = NULL;
+    bool mic_is_currently_muted = false; // this is used as a flag by the app, tbd replace later w/GetCurrentlyMuted()
+    UINT_PTR QK_TIMER = 0x11; // gets updated as timer gets set.
+    BOOL GetCurrentlyMuted()
+    {
+        BOOL muted;
+        gQuietKeys::defaultMicVolume->GetMute(&muted);
+        return muted;
+    }
+    void Unmute() {
+        if (gQuietKeys::GetCurrentlyMuted() == TRUE) {
+            gQuietKeys::defaultMicVolume->SetMute(FALSE, NULL);
+            PostMessage(gQuietKeys::nid.hWnd, APPWM_MICUNMUTED, NULL, NULL);
+        }
+    }
+    void Mute() {
+        if (gQuietKeys::GetCurrentlyMuted() == FALSE) {
+            gQuietKeys::defaultMicVolume->SetMute(TRUE, NULL);
+            PostMessage(gQuietKeys::nid.hWnd, APPWM_MICMUTED, NULL, NULL);
+        }
+    }
+    float GetCurrentVolume()
+    {
+        float volume;
+        gQuietKeys::defaultMicVolume->GetMasterVolumeLevelScalar(&volume);
+        return volume;
+    }
+    void Timerproc(HWND Arg1, UINT Arg2, UINT_PTR Arg3, DWORD Arg4)
+    {
+        gQuietKeys::Unmute();
+        KillTimer(NULL, gQuietKeys::QK_TIMER);
+        gQuietKeys::mic_is_currently_muted = false;
+    }
+}
+
+// win32 grab the audio input
+void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defaultMicVolume)
+{
+    IMMDeviceEnumerator* deviceEnumerator = NULL;
+    IMMDevice* defaultDevice = NULL;
+    IPropertyStore* defaultDeviceProperties;
+    PROPVARIANT deviceFriendlyName;
+
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator),
+        NULL,
+        CLSCTX_INPROC_SERVER,
+        __uuidof(IMMDeviceEnumerator),
+        (LPVOID*)&deviceEnumerator);
+
+    hr = deviceEnumerator->GetDefaultAudioEndpoint(eCapture, eConsole, &defaultDevice);
+
+    hr = defaultDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_INPROC_SERVER, NULL, (LPVOID*)&*defaultMicVolume);
+    hr = defaultDevice->OpenPropertyStore(STGM_READ, &defaultDeviceProperties);
+
+    PropVariantInit(&deviceFriendlyName);
+    hr = defaultDeviceProperties->GetValue(PKEY_DeviceInterface_FriendlyName, &deviceFriendlyName);
+
+    int length = lstrlen((wchar_t*)deviceFriendlyName.pszVal);
+    *defaultMicFriendlyName = new wchar_t[length];
+    wsprintf(*defaultMicFriendlyName, (wchar_t*)deviceFriendlyName.pszVal);
+
+    PropVariantClear(&deviceFriendlyName);
+    deviceEnumerator->Release();
+    deviceEnumerator = NULL;
+    defaultDevice->Release();
+    defaultDeviceProperties->Release();
+    defaultDevice = NULL;
+}
+
+// the meat of the keyboard callback
+void TypingIsHappening()
+{
+    if (gQuietKeys::defaultMicVolume == nullptr) {
+        OutputDebugString(L"typing is happening, but the mic isn't registered. try restarting the app.");
+        return;
+    }
+    if (gQuietKeys::mic_is_currently_muted == false) {
+        // mute the mic & set the timer.
+        gQuietKeys::mic_is_currently_muted = true;
+        gQuietKeys::Mute();
+        gQuietKeys::QK_TIMER = SetTimer(NULL, gQuietKeys::QK_TIMER, 2000, (TIMERPROC)gQuietKeys::Timerproc);
+    }
+    // extend the timer while typing continues
+    gQuietKeys::QK_TIMER = SetTimer(NULL, gQuietKeys::QK_TIMER, 2000, (TIMERPROC)gQuietKeys::Timerproc);
+    // (typing is happening and mic is muted)
+}
+
+// the keyboard callback
+LRESULT CALLBACK LowLevelKeyboardProc(_In_ int nCode, _In_ WPARAM wParam, _In_ LPARAM lParam)
+{
+    // https://msdn.microsoft.com/en-us/library/windows/desktop/ms644985(v=vs.85).aspx
+    KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+
+    if (wParam == WM_KEYUP && !gQuietKeys::disabled) { // don't look at the actual key. just start muting (or stay muted) until done typing.
+        TypingIsHappening();
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
 // Forward declarations of functions included in this code module:
@@ -139,6 +244,24 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    Shell_NotifyIcon(NIM_ADD, &gQuietKeys::nid);
 
+   // insert core keyboard hook
+   gQuietKeys::hookKeyboard = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, NULL);
+   // init com
+   HRESULT hr = CoInitialize(NULL);
+   if (hr != S_OK) {
+       return FALSE;
+   }
+   // grab the default mic
+   GetDefaultMic(&gQuietKeys::defaultMicFriendlyName, &gQuietKeys::defaultMicVolume);
+
+   /*
+   * TODO: update about dialog to display this
+   * printf("Managing default mic: %ws (volume: %f, %ws)\n",
+        defaultMicFriendlyName,
+        quietkeys_global::GetCurrentVolume(),
+        quietkeys_global::GetCurrentlyMuted() == TRUE ? L"currently muted" : L"currently unmuted");
+   */
+
    return TRUE;
 }
 
@@ -156,6 +279,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+    case APPWM_MICMUTED:
+        gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic_mute_fill;
+        Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
+        break;
+    case APPWM_MICUNMUTED:
+        OutputDebugString(L"Unmute");
+        gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic_fill;
+        Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
+        break;
     case APPWM_ICONNOTIFY:
     {
         switch (lParam)
@@ -218,6 +350,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
     case WM_DESTROY:
+        KillTimer(NULL, gQuietKeys::QK_TIMER);
+        UnhookWindowsHookEx(gQuietKeys::hookKeyboard);
+        gQuietKeys::defaultMicVolume->Release();
+        gQuietKeys::defaultMicVolume = NULL;
+        gQuietKeys::defaultMicFriendlyName = NULL;
+        CoUninitialize();
         PostQuitMessage(0);
         break;
     default:
@@ -234,7 +372,7 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     {
     case WM_INITDIALOG:
         return (INT_PTR)TRUE;
-
+        break;
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
         {
