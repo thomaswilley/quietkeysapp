@@ -151,8 +151,10 @@
     <ResourceCompile Include="QuietkeysApp.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="QuietkeysApp.ico" />
-    <Image Include="small.ico" />
+    <Image Include="Icons\mic.ico" />
+    <Image Include="Icons\mic_fill.ico" />
+    <Image Include="Icons\mic_mute.ico" />
+    <Image Include="Icons\mic_mute_fill.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

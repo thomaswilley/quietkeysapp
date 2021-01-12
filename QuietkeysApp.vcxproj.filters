@@ -39,10 +39,16 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="small.ico">
+    <Image Include="Icons\mic_mute.ico">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="QuietkeysApp.ico">
+    <Image Include="Icons\mic_mute_fill.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Icons\mic_fill.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Icons\mic.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

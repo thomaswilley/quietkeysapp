@@ -5,6 +5,7 @@
 #include "QuietkeysApp.h"
 #include <shellapi.h>
 #include <stdio.h>
+#include <strsafe.h>
 
 #define MAX_LOADSTRING 100
 #define APPWM_ICONNOTIFY (WM_APP + 1)
@@ -16,6 +17,11 @@ WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
 namespace gQuietKeys {
     bool disabled = false;
+    HICON hIcon_mic;
+    HICON hIcon_mic_fill;
+    HICON hIcon_mic_mute;
+    HICON hIcon_mic_mute_fill;
+    NOTIFYICONDATA nid;
 }
 
 // Forward declarations of functions included in this code module:
@@ -36,6 +42,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_QUIETKEYSAPP, szWindowClass, MAX_LOADSTRING);
     MyRegisterClass(hInstance);
+
+    gQuietKeys::hIcon_mic = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC));
+    gQuietKeys::hIcon_mic_fill = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_FILL));
+    gQuietKeys::hIcon_mic_mute = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_MUTE));
+    gQuietKeys::hIcon_mic_mute_fill = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_MUTE_FILL));
 
     // Perform application initialization:
     if (!InitInstance (hInstance, SW_HIDE))
@@ -78,12 +89,12 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.cbClsExtra     = 0;
     wcex.cbWndExtra     = 0;
     wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_QUIETKEYSAPP));
+    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_FILL));
     wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
     wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_QUIETKEYSAPP);
     wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_MIC_FILL));
 
     return RegisterClassExW(&wcex);
 }
@@ -112,26 +123,21 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
+   
+   // setup the notification icon
+   gQuietKeys::nid = {};
+   gQuietKeys::nid.cbSize = sizeof(gQuietKeys::nid);
+   gQuietKeys::nid.hWnd = hWnd;
+   gQuietKeys::nid.uID = 1;
+   gQuietKeys::nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
+   gQuietKeys::nid.uCallbackMessage = APPWM_ICONNOTIFY;
+   gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic_fill;
+   StringCchPrintf(gQuietKeys::nid.szTip,
+       ARRAYSIZE(gQuietKeys::nid.szTip),
+       L"%ws (Enabled)",
+       szTitle);
 
-   HICON hIcon = static_cast<HICON>(LoadImage(NULL,
-       TEXT("small.ico"),
-       IMAGE_ICON,
-       0, 0,
-       LR_DEFAULTCOLOR | LR_SHARED | LR_DEFAULTSIZE | LR_LOADFROMFILE));
-
-   SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-   SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-
-   NOTIFYICONDATA nid = {};
-   nid.cbSize = sizeof(nid);
-   nid.hWnd = hWnd;
-   nid.uID = 1;
-   nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
-   nid.uCallbackMessage = APPWM_ICONNOTIFY;
-   nid.hIcon = hIcon;
-   wsprintf(nid.szTip, szTitle);
-
-   Shell_NotifyIcon(NIM_ADD, &nid);
+   Shell_NotifyIcon(NIM_ADD, &gQuietKeys::nid);
 
    return TRUE;
 }
@@ -155,10 +161,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         switch (lParam)
         {
         case WM_LBUTTONUP:
-            /* disable / enable */
+            // left-click to toggle whether enabled or disabled
             gQuietKeys::disabled = !gQuietKeys::disabled;
+            if (gQuietKeys::disabled == TRUE) {
+                gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic;
+                StringCchPrintf(gQuietKeys::nid.szTip,
+                    ARRAYSIZE(gQuietKeys::nid.szTip),
+                    L"%ws (Disabled)",
+                    szTitle);
+            }
+            else {
+                gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic_fill;
+                StringCchPrintf(gQuietKeys::nid.szTip,
+                    ARRAYSIZE(gQuietKeys::nid.szTip),
+                    L"%ws (Enabled)",
+                    szTitle);
+            }
+            Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
             break;
         case WM_RBUTTONUP:
+            // right-click for the context menu
             SetForegroundWindow(hWnd);
             HMENU menu = LoadMenu(hInst, MAKEINTRESOURCEW(IDC_QUIETKEYSAPP));
             UINT flags = TPM_LEFTALIGN | TPM_TOPALIGN;
@@ -166,7 +188,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             GetCursorPos(&cursorpos);
             BOOL menuVisible = TrackPopupMenuEx(
                 GetSubMenu(menu, 0), flags, cursorpos.x, cursorpos.y, hWnd, NULL);
-            //menuVisible == TRUE ? OutputDebugString(L"Menu visible") : OutputDebugString(L"Error trying to show menu");
             break;
         }
     }
