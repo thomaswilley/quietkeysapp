@@ -1,6 +1,8 @@
 // QuietkeysApp.cpp : Defines the entry point for the application.
 //
 
+//#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
 #include "framework.h"
 #include "QuietkeysApp.h"
 #include <shellapi.h>
@@ -10,6 +12,11 @@
 #include <mmdeviceapi.h>
 #include <endpointvolume.h>
 #include <Functiondiscoverykeys_devpkey.h>
+#include <commctrl.h> // NM_CLICK
+
+// for using syslink ctl in about dialog. :/
+// https://github.com/microsoftarchive/msdn-code-gallery-microsoft/blob/master/OneCodeTeam/Windows%20common%20controls%20demo%20(CppWindowsCommonControls)/%5BC%2B%2B%5D-Windows%20common%20controls%20demo%20(CppWindowsCommonControls)/C%2B%2B/CppWindowsCommonControls/CppWindowsCommonControls.cpp
+#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 #define MAX_LOADSTRING      100
 #define APPWM_ICONNOTIFY    (WM_APP + 1)
@@ -21,6 +28,7 @@ HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
+// global namespace
 namespace gQuietKeys {
     bool disabled = false;
     HICON hIcon_mic;
@@ -65,75 +73,14 @@ namespace gQuietKeys {
     }
 }
 
-// win32 grab the audio input
-void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defaultMicVolume)
-{
-    IMMDeviceEnumerator* deviceEnumerator = NULL;
-    IMMDevice* defaultDevice = NULL;
-    IPropertyStore* defaultDeviceProperties;
-    PROPVARIANT deviceFriendlyName;
-
-    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator),
-        NULL,
-        CLSCTX_INPROC_SERVER,
-        __uuidof(IMMDeviceEnumerator),
-        (LPVOID*)&deviceEnumerator);
-
-    hr = deviceEnumerator->GetDefaultAudioEndpoint(eCapture, eConsole, &defaultDevice);
-
-    hr = defaultDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_INPROC_SERVER, NULL, (LPVOID*)&*defaultMicVolume);
-    hr = defaultDevice->OpenPropertyStore(STGM_READ, &defaultDeviceProperties);
-
-    PropVariantInit(&deviceFriendlyName);
-    hr = defaultDeviceProperties->GetValue(PKEY_DeviceInterface_FriendlyName, &deviceFriendlyName);
-
-    int length = lstrlen((wchar_t*)deviceFriendlyName.pszVal);
-    *defaultMicFriendlyName = new wchar_t[length];
-    wsprintf(*defaultMicFriendlyName, (wchar_t*)deviceFriendlyName.pszVal);
-
-    PropVariantClear(&deviceFriendlyName);
-    deviceEnumerator->Release();
-    deviceEnumerator = NULL;
-    defaultDevice->Release();
-    defaultDeviceProperties->Release();
-    defaultDevice = NULL;
-}
-
-// the meat of the keyboard callback
-void TypingIsHappening()
-{
-    if (gQuietKeys::defaultMicVolume == nullptr) {
-        OutputDebugString(L"typing is happening, but the mic isn't registered. try restarting the app.");
-        return;
-    }
-    if (gQuietKeys::mic_is_currently_muted == false) {
-        // mute the mic & set the timer.
-        gQuietKeys::mic_is_currently_muted = true;
-        gQuietKeys::Mute();
-        gQuietKeys::QK_TIMER = SetTimer(NULL, gQuietKeys::QK_TIMER, 2000, (TIMERPROC)gQuietKeys::Timerproc);
-    }
-    // extend the timer while typing continues
-    gQuietKeys::QK_TIMER = SetTimer(NULL, gQuietKeys::QK_TIMER, 2000, (TIMERPROC)gQuietKeys::Timerproc);
-    // (typing is happening and mic is muted)
-}
-
-// the keyboard callback
-LRESULT CALLBACK LowLevelKeyboardProc(_In_ int nCode, _In_ WPARAM wParam, _In_ LPARAM lParam)
-{
-    // https://msdn.microsoft.com/en-us/library/windows/desktop/ms644985(v=vs.85).aspx
-    KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
-
-    if (wParam == WM_KEYUP && !gQuietKeys::disabled) { // don't look at the actual key. just start muting (or stay muted) until done typing.
-        TypingIsHappening();
-    }
-    return CallNextHookEx(NULL, nCode, wParam, lParam);
-}
-
-// Forward declarations of functions included in this code module:
+// forward declarations
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK LowLevelKeyboardProc(_In_ int nCode, _In_ WPARAM wParam, _In_ LPARAM lParam);
+void TypingIsHappening();
+void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defaultMicVolume);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -331,7 +278,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             switch (wmId)
             {
             case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+                DialogBox(hInst, MAKEINTRESOURCEW(IDD_ABOUTBOX), hWnd, About);
                 break;
             case IDM_EXIT:
                 DestroyWindow(hWnd);
@@ -380,6 +327,83 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
             return (INT_PTR)TRUE;
         }
         break;
+    case WM_NOTIFY:
+        switch (((LPNMHDR)lParam)->code)
+        {
+        case NM_CLICK:
+            if (wParam == IDC_SYSLINK1)
+            {
+                PNMLINK pNMLink = (PNMLINK)lParam;
+                LITEM   item = pNMLink->item;
+                ShellExecute(NULL, L"open", item.szUrl, NULL, NULL, SW_SHOW);
+            }
+            break;
+        }
+        break;
     }
     return (INT_PTR)FALSE;
+}
+
+// win32 grab the audio input
+void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defaultMicVolume)
+{
+    IMMDeviceEnumerator* deviceEnumerator = NULL;
+    IMMDevice* defaultDevice = NULL;
+    IPropertyStore* defaultDeviceProperties;
+    PROPVARIANT deviceFriendlyName;
+
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator),
+        NULL,
+        CLSCTX_INPROC_SERVER,
+        __uuidof(IMMDeviceEnumerator),
+        (LPVOID*)&deviceEnumerator);
+
+    hr = deviceEnumerator->GetDefaultAudioEndpoint(eCapture, eConsole, &defaultDevice);
+
+    hr = defaultDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_INPROC_SERVER, NULL, (LPVOID*)&*defaultMicVolume);
+    hr = defaultDevice->OpenPropertyStore(STGM_READ, &defaultDeviceProperties);
+
+    PropVariantInit(&deviceFriendlyName);
+    hr = defaultDeviceProperties->GetValue(PKEY_DeviceInterface_FriendlyName, &deviceFriendlyName);
+
+    int length = lstrlen((wchar_t*)deviceFriendlyName.pszVal);
+    *defaultMicFriendlyName = new wchar_t[length];
+    wsprintf(*defaultMicFriendlyName, (wchar_t*)deviceFriendlyName.pszVal);
+
+    PropVariantClear(&deviceFriendlyName);
+    deviceEnumerator->Release();
+    deviceEnumerator = NULL;
+    defaultDevice->Release();
+    defaultDeviceProperties->Release();
+    defaultDevice = NULL;
+}
+
+// the meat of the keyboard callback
+void TypingIsHappening()
+{
+    if (gQuietKeys::defaultMicVolume == nullptr) {
+        OutputDebugString(L"typing is happening, but the mic isn't registered. try restarting the app.");
+        return;
+    }
+    if (gQuietKeys::mic_is_currently_muted == false) {
+        // mute the mic & set the timer.
+        gQuietKeys::mic_is_currently_muted = true;
+        gQuietKeys::Mute();
+        gQuietKeys::QK_TIMER = SetTimer(NULL, gQuietKeys::QK_TIMER, 2000, (TIMERPROC)gQuietKeys::Timerproc);
+    }
+    // extend the timer while typing continues
+    gQuietKeys::QK_TIMER = SetTimer(NULL, gQuietKeys::QK_TIMER, 2000, (TIMERPROC)gQuietKeys::Timerproc);
+    // (typing is happening and mic is muted)
+}
+
+// the keyboard callback
+LRESULT CALLBACK LowLevelKeyboardProc(_In_ int nCode, _In_ WPARAM wParam, _In_ LPARAM lParam)
+{
+    // https://msdn.microsoft.com/en-us/library/windows/desktop/ms644985(v=vs.85).aspx
+    KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+
+    if (wParam == WM_KEYUP && !gQuietKeys::disabled) { // don't look at the actual key. just start muting (or stay muted) until done typing.
+        TypingIsHappening();
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
