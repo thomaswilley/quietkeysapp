@@ -51,5 +51,17 @@
     <Image Include="Icons\mic.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="Icons\mic_fill_white.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Icons\mic_mute_fill_white.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Icons\mic_white.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Icons\mic_mute_white.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

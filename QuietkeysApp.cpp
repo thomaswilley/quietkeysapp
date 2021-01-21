@@ -23,10 +23,25 @@
 #define APPWM_MICMUTED      (WM_APP + 2)
 #define APPWM_MICUNMUTED    (WM_APP + 3)
 
+// for gQuietKeys::GetIcon
+#define ICON_ENABLED        1
+#define ICON_DISABLED       2
+#define ICON_TYPING         3
+
 // Global Variables:
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
+
+// forward declarations
+ATOM                MyRegisterClass(HINSTANCE hInstance);
+BOOL                InitInstance(HINSTANCE, int);
+LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK LowLevelKeyboardProc(_In_ int nCode, _In_ WPARAM wParam, _In_ LPARAM lParam);
+void TypingIsHappening();
+void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defaultMicVolume);
+BOOL IsDarkThemeActive();
 
 // global namespace
 namespace gQuietKeys {
@@ -35,12 +50,32 @@ namespace gQuietKeys {
     HICON hIcon_mic_fill;
     HICON hIcon_mic_mute;
     HICON hIcon_mic_mute_fill;
+    HICON hIcon_mic_white;
+    HICON hIcon_mic_fill_white;
+    HICON hIcon_mic_mute_white;
+    HICON hIcon_mic_mute_fill_white;
     NOTIFYICONDATA nid;
     HHOOK hookKeyboard;
     wchar_t* defaultMicFriendlyName = NULL;
     IAudioEndpointVolume* defaultMicVolume = NULL;
     bool mic_is_currently_muted = false; // this is used as a flag by the app, tbd replace later w/GetCurrentlyMuted()
     UINT_PTR QK_TIMER = 0x11; // gets updated as timer gets set.
+    HICON GetQKIcon(int icon_code) {
+        BOOL bDark = IsDarkThemeActive();
+        switch (icon_code) {
+        case ICON_ENABLED:
+            return bDark ? gQuietKeys::hIcon_mic_fill_white : gQuietKeys::hIcon_mic_fill;
+            break;
+        case ICON_TYPING:
+            return bDark ? gQuietKeys::hIcon_mic_mute_fill_white : gQuietKeys::hIcon_mic_mute_fill;
+            break;
+        case ICON_DISABLED:
+            return bDark ? gQuietKeys::hIcon_mic_white : gQuietKeys::hIcon_mic;
+            break;
+        default:
+            return GetQKIcon(ICON_DISABLED);
+        }
+    }
     BOOL GetCurrentlyMuted()
     {
         BOOL muted;
@@ -73,15 +108,6 @@ namespace gQuietKeys {
     }
 }
 
-// forward declarations
-ATOM                MyRegisterClass(HINSTANCE hInstance);
-BOOL                InitInstance(HINSTANCE, int);
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK LowLevelKeyboardProc(_In_ int nCode, _In_ WPARAM wParam, _In_ LPARAM lParam);
-void TypingIsHappening();
-void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defaultMicVolume);
-
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
                      _In_ LPWSTR    lpCmdLine,
@@ -96,10 +122,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     MyRegisterClass(hInstance);
 
     gQuietKeys::hIcon_mic = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC));
-    gQuietKeys::hIcon_mic_fill = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_FILL));
     gQuietKeys::hIcon_mic_mute = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_MUTE));
     gQuietKeys::hIcon_mic_mute_fill = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_MUTE_FILL));
-
+    gQuietKeys::hIcon_mic_fill = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_FILL));
+    gQuietKeys::hIcon_mic_white = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_WHITE));
+    gQuietKeys::hIcon_mic_mute_white = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_MUTE_WHITE));
+    gQuietKeys::hIcon_mic_mute_fill_white = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_MUTE_FILL_WHITE));
+    gQuietKeys::hIcon_mic_fill_white = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_FILL_WHITE));
+    
     // Perform application initialization:
     if (!InitInstance (hInstance, SW_HIDE))
     {
@@ -141,12 +171,12 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.cbClsExtra     = 0;
     wcex.cbWndExtra     = 0;
     wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MIC_FILL));
+    wcex.hIcon          = gQuietKeys::GetQKIcon(ICON_ENABLED);
     wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
     wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_QUIETKEYSAPP);
     wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_MIC_FILL));
+    wcex.hIconSm        = gQuietKeys::GetQKIcon(ICON_ENABLED);
 
     return RegisterClassExW(&wcex);
 }
@@ -183,7 +213,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    gQuietKeys::nid.uID = 1;
    gQuietKeys::nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
    gQuietKeys::nid.uCallbackMessage = APPWM_ICONNOTIFY;
-   gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic_fill;
+   gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_ENABLED);
    StringCchPrintf(gQuietKeys::nid.szTip,
        ARRAYSIZE(gQuietKeys::nid.szTip),
        L"%ws (Enabled)",
@@ -212,6 +242,25 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    return TRUE;
 }
 
+// a hacky way to see if the taskbar is dark or light themed so we can use the light / dark icon set
+BOOL IsDarkThemeActive()
+{
+    DWORD   type;
+    DWORD   value;
+    DWORD   count = 4;
+    LSTATUS st = RegGetValue(
+        HKEY_CURRENT_USER,
+        TEXT("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
+        TEXT("SystemUsesLightTheme"),
+        RRF_RT_REG_DWORD,
+        &type,
+        &value,
+        &count);
+    if (st == ERROR_SUCCESS && type == REG_DWORD)
+        return (BOOL)value == 0;
+    return FALSE;
+}
+
 //
 //  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
 //
@@ -227,12 +276,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case APPWM_MICMUTED:
-        gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic_mute_fill;
+        gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_TYPING);
         Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
         break;
     case APPWM_MICUNMUTED:
         OutputDebugString(L"Unmute");
-        gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic_fill;
+        gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_ENABLED);
         Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
         break;
     case APPWM_ICONNOTIFY:
@@ -243,14 +292,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // left-click to toggle whether enabled or disabled
             gQuietKeys::disabled = !gQuietKeys::disabled;
             if (gQuietKeys::disabled == TRUE) {
-                gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic;
+                gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_DISABLED);
                 StringCchPrintf(gQuietKeys::nid.szTip,
                     ARRAYSIZE(gQuietKeys::nid.szTip),
                     L"%ws (Disabled)",
                     szTitle);
             }
             else {
-                gQuietKeys::nid.hIcon = gQuietKeys::hIcon_mic_fill;
+                gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_ENABLED);
                 StringCchPrintf(gQuietKeys::nid.szTip,
                     ARRAYSIZE(gQuietKeys::nid.szTip),
                     L"%ws (Enabled)",
@@ -268,6 +317,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             BOOL menuVisible = TrackPopupMenuEx(
                 GetSubMenu(menu, 0), flags, cursorpos.x, cursorpos.y, hWnd, NULL);
             break;
+        }
+    }
+    break;
+    case WM_SETTINGCHANGE:
+    {
+        if (!lstrcmp(LPCTSTR(lParam), L"ImmersiveColorSet"))
+        {
+            // poke the hwnd if dark/light them changes while running.
+            if (gQuietKeys::disabled) {
+                gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_DISABLED);
+            }
+            else {
+                gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_ENABLED);
+            }
+            Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
         }
     }
     break;
@@ -303,6 +367,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         gQuietKeys::defaultMicVolume = NULL;
         gQuietKeys::defaultMicFriendlyName = NULL;
         CoUninitialize();
+        Shell_NotifyIcon(NIM_DELETE, &gQuietKeys::nid);
         PostQuitMessage(0);
         break;
     default:

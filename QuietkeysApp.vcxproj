@@ -155,8 +155,12 @@
   <ItemGroup>
     <Image Include="Icons\mic.ico" />
     <Image Include="Icons\mic_fill.ico" />
+    <Image Include="Icons\mic_fill_white.ico" />
     <Image Include="Icons\mic_mute.ico" />
     <Image Include="Icons\mic_mute_fill.ico" />
+    <Image Include="Icons\mic_mute_fill_white.ico" />
+    <Image Include="Icons\mic_mute_white.ico" />
+    <Image Include="Icons\mic_white.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
