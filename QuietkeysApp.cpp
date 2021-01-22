@@ -1,9 +1,12 @@
-// QuietkeysApp.cpp : Defines the entry point for the application.
-//
+/*
+* QuietKeys / QuietKeysApp
+* Copyright (c) 2021 Increment, LLC
+**A tiny native win32/c++ app that mutes your default PC mic while you type (with a 2s delay when you're done)
+**Makes calls from your PC quieter (they can't hear you type!) without you needing to think about it.
+* License: See https://github.com/thomaswilley/quietkeysapp
+* Icons credit: https://getbootstrap.com
+*/
 
-//#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
-
-#include "framework.h"
 #include "QuietkeysApp.h"
 #include <shellapi.h>
 #include <stdio.h>
@@ -27,6 +30,7 @@
 #define ICON_ENABLED        1
 #define ICON_DISABLED       2
 #define ICON_TYPING         3
+#define ICON_DISABLED_ERROR 4
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
@@ -55,11 +59,39 @@ namespace gQuietKeys {
     HICON hIcon_mic_mute_white;
     HICON hIcon_mic_mute_fill_white;
     NOTIFYICONDATA nid;
+    HWND hDlg_About;
     HHOOK hookKeyboard;
     wchar_t* defaultMicFriendlyName = NULL;
+    wchar_t strFriendlyStatus[75];
     IAudioEndpointVolume* defaultMicVolume = NULL;
     bool mic_is_currently_muted = false; // this is used as a flag by the app, tbd replace later w/GetCurrentlyMuted()
     UINT_PTR QK_TIMER = 0x11; // gets updated as timer gets set.
+
+    void SetFriendlyStatus(int icon_code)
+    {
+        switch (icon_code)
+        {
+        case ICON_DISABLED:
+            StringCchPrintf(gQuietKeys::strFriendlyStatus, 75, L"%ws", L"QuietKeys is disabled. To enable, left-click its icon!");
+            break;
+        case ICON_ENABLED:
+            StringCchPrintf(gQuietKeys::strFriendlyStatus, 75, L"Active on default mic: %ws", gQuietKeys::defaultMicFriendlyName);
+            break;
+        case ICON_TYPING:
+            StringCchPrintf(gQuietKeys::strFriendlyStatus, 75, L"Active [now typing/muted] on default mic: %ws", gQuietKeys::defaultMicFriendlyName);
+            break;
+        case ICON_DISABLED_ERROR:
+            StringCchPrintf(gQuietKeys::strFriendlyStatus, 75, L"%ws", L"QuietKeys is disabled: An error has occurred.");
+            break;
+        default:
+            break;
+        }
+        if (gQuietKeys::hDlg_About != NULL)
+        {
+            PostMessage(gQuietKeys::hDlg_About, APPWM_ICONNOTIFY, NULL, NULL);
+        }
+    }
+
     HICON GetQKIcon(int icon_code) {
         BOOL bDark = IsDarkThemeActive();
         switch (icon_code) {
@@ -76,30 +108,37 @@ namespace gQuietKeys {
             return GetQKIcon(ICON_DISABLED);
         }
     }
+
     BOOL GetCurrentlyMuted()
     {
         BOOL muted;
         gQuietKeys::defaultMicVolume->GetMute(&muted);
         return muted;
     }
+
     void Unmute() {
         if (gQuietKeys::GetCurrentlyMuted() == TRUE) {
             gQuietKeys::defaultMicVolume->SetMute(FALSE, NULL);
             PostMessage(gQuietKeys::nid.hWnd, APPWM_MICUNMUTED, NULL, NULL);
+            gQuietKeys::SetFriendlyStatus(ICON_ENABLED);
         }
     }
+
     void Mute() {
         if (gQuietKeys::GetCurrentlyMuted() == FALSE) {
             gQuietKeys::defaultMicVolume->SetMute(TRUE, NULL);
             PostMessage(gQuietKeys::nid.hWnd, APPWM_MICMUTED, NULL, NULL);
+            gQuietKeys::SetFriendlyStatus(ICON_TYPING);
         }
     }
+
     float GetCurrentVolume()
     {
         float volume;
         gQuietKeys::defaultMicVolume->GetMasterVolumeLevelScalar(&volume);
         return volume;
     }
+
     void Timerproc(HWND Arg1, UINT Arg2, UINT_PTR Arg3, DWORD Arg4)
     {
         gQuietKeys::Unmute();
@@ -152,8 +191,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     return (int) msg.wParam;
 }
-
-
 
 //
 //  FUNCTION: MyRegisterClass()
@@ -211,33 +248,40 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    gQuietKeys::nid.cbSize = sizeof(gQuietKeys::nid);
    gQuietKeys::nid.hWnd = hWnd;
    gQuietKeys::nid.uID = 1;
-   gQuietKeys::nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
+   gQuietKeys::nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE | NIF_INFO;
    gQuietKeys::nid.uCallbackMessage = APPWM_ICONNOTIFY;
    gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_ENABLED);
    StringCchPrintf(gQuietKeys::nid.szTip,
        ARRAYSIZE(gQuietKeys::nid.szTip),
        L"%ws (Enabled)",
        szTitle);
-
+   StringCchPrintf(gQuietKeys::nid.szInfoTitle,
+       ARRAYSIZE(gQuietKeys::nid.szInfoTitle),
+       L"%ws is running!",
+       szTitle);
+   StringCchPrintf(gQuietKeys::nid.szInfo,
+       ARRAYSIZE(gQuietKeys::nid.szInfo),
+       L"%ws",
+       L"QuietKeys lives down in your system notification tray just like your battery % and wifi. Right-click it's icon to manage, left-click to enable/disable.");
+   gQuietKeys::nid.uTimeout = 5000;
    Shell_NotifyIcon(NIM_ADD, &gQuietKeys::nid);
+
+   gQuietKeys::nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE; // invalidate NIF_INFO (so we don't show the balloon tooltip anymore.
+   gQuietKeys::nid.hBalloonIcon = gQuietKeys::nid.hIcon;
+   Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
 
    // insert core keyboard hook
    gQuietKeys::hookKeyboard = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, NULL);
    // init com
    HRESULT hr = CoInitialize(NULL);
    if (hr != S_OK) {
+       gQuietKeys::SetFriendlyStatus(ICON_DISABLED_ERROR);
        return FALSE;
    }
    // grab the default mic
    GetDefaultMic(&gQuietKeys::defaultMicFriendlyName, &gQuietKeys::defaultMicVolume);
 
-   /*
-   * TODO: update about dialog to display this
-   * printf("Managing default mic: %ws (volume: %f, %ws)\n",
-        defaultMicFriendlyName,
-        quietkeys_global::GetCurrentVolume(),
-        quietkeys_global::GetCurrentlyMuted() == TRUE ? L"currently muted" : L"currently unmuted");
-   */
+   gQuietKeys::SetFriendlyStatus(ICON_ENABLED);
 
    return TRUE;
 }
@@ -278,11 +322,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case APPWM_MICMUTED:
         gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_TYPING);
         Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
+        gQuietKeys::SetFriendlyStatus(ICON_TYPING);
         break;
     case APPWM_MICUNMUTED:
-        OutputDebugString(L"Unmute");
         gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_ENABLED);
         Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
+        gQuietKeys::SetFriendlyStatus(ICON_ENABLED);
         break;
     case APPWM_ICONNOTIFY:
     {
@@ -297,6 +342,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     ARRAYSIZE(gQuietKeys::nid.szTip),
                     L"%ws (Disabled)",
                     szTitle);
+                gQuietKeys::SetFriendlyStatus(ICON_DISABLED);
             }
             else {
                 gQuietKeys::nid.hIcon = gQuietKeys::GetQKIcon(ICON_ENABLED);
@@ -304,6 +350,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     ARRAYSIZE(gQuietKeys::nid.szTip),
                     L"%ws (Enabled)",
                     szTitle);
+                gQuietKeys::SetFriendlyStatus(ICON_ENABLED);
             }
             Shell_NotifyIcon(NIM_MODIFY, &gQuietKeys::nid);
             break;
@@ -383,14 +430,21 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_INITDIALOG:
+        gQuietKeys::hDlg_About = hDlg;
+        SetDlgItemText(hDlg, IDC_ABOUTDLG_STATIC_STATUS, gQuietKeys::strFriendlyStatus);
         return (INT_PTR)TRUE;
+        break;
+    case APPWM_ICONNOTIFY:
+        SetDlgItemText(hDlg, IDC_ABOUTDLG_STATIC_STATUS, gQuietKeys::strFriendlyStatus);
         break;
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
         {
             EndDialog(hDlg, LOWORD(wParam));
+            gQuietKeys::hDlg_About = NULL;
             return (INT_PTR)TRUE;
         }
+        SetDlgItemText(hDlg, IDC_ABOUTDLG_STATIC_STATUS, gQuietKeys::strFriendlyStatus);
         break;
     case WM_NOTIFY:
         switch (((LPNMHDR)lParam)->code)
@@ -424,7 +478,6 @@ void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defa
         (LPVOID*)&deviceEnumerator);
 
     hr = deviceEnumerator->GetDefaultAudioEndpoint(eCapture, eConsole, &defaultDevice);
-
     hr = defaultDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_INPROC_SERVER, NULL, (LPVOID*)&*defaultMicVolume);
     hr = defaultDevice->OpenPropertyStore(STGM_READ, &defaultDeviceProperties);
 
