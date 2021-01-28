@@ -8,6 +8,10 @@ QuietKeys is a tiny app for Windows PCs that automatically mutes your keyboard a
 # Installation
 
 You can either compile QuietKeys yourself or download the latest QuietKeysApp.exe from /Release.
+If you'd like to compile it, grab a free copy of Microsoft Visual Studio 2019, make sure to install it with C/C++ compilation features, and open up QuietKeysApp.sln and hit F5 to build.
+
+If you'd like to set it to always run at startup, it takes 10 seconds following these 3 steps from Microsoft.com:
+https://support.microsoft.com/en-us/windows/add-an-app-to-run-automatically-at-startup-in-windows-10-150da165-dcd9-7230-517b-cf3c295d89dd
 
 # Other similar software
 
