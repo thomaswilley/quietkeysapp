@@ -13,6 +13,9 @@ If you'd like to compile it, grab a free copy of Microsoft Visual Studio 2019, m
 If you'd like to set it to always run at startup, it takes 10 seconds following these 3 steps from Microsoft.com:
 https://support.microsoft.com/en-us/windows/add-an-app-to-run-automatically-at-startup-in-windows-10-150da165-dcd9-7230-517b-cf3c295d89dd
 
+And if you want to disable it or remove it from startup, another 5 seconds following these 2 steps:
+https://support.microsoft.com/en-us/windows/change-which-apps-run-automatically-at-startup-in-windows-10-9115d841-735e-488d-e749-9ba301d441e6
+
 # Other similar software
 
 I'm aware of two other similar apps - neither work on windows, ergo - QuietKeys.
