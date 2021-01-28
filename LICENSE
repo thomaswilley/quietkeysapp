@@ -31,8 +31,8 @@ input devices (keyboard and microphone in this case) - should be open sourced
 at a minimum in this manner (if not less restrictively!) so source code can be
 inspected directly by users and modified for their own personal benefit at a
 minimum. A motivation for the restritiveness is that the Software is also a
-test use case for https://increment.me and includes a link to users within the
-Software to provide feedback - and this protective license ensures that any
+test use case for https://increment.me and includes a link within the
+Software for users to provide feedback - and this protective license ensures that any
 feedback provided is associated with the Software as intended.
 
 ***Obtain a custom License or share Feedback: If you would like to provide
