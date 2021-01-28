@@ -6,9 +6,9 @@ this software and associated documentation files (the “Software”), to compil
 modify, and/or run the software for personal use. The software may not be
 redistributed in any form.
 
-Modifications to the software for personal use may be submitted back to
-copyright holders (i.e., pull request)  as a Contribution for copyright
-holders' consideration to incorporate into the Software.
+Modifications to the software for personal use may be submitted as
+Contributions back to copyright holders (i.e., pull request) copyright holders'
+consideration to incorporate into the Software.
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -18,22 +18,27 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Developer comment: This license may change at any time. If it does change, it's
+=====
+Developer comment:
+
+This license may change at any time. If it does change, it's
 likely to be less restrictive. The rationale for providing this source code
 openly is to protect user privacy - not to encourage further community
-development (although pull requests are welcome). The developer believes
-applications like QuietKeys - which hook into end-user input devices (keyboard
-and microphone in this case) - should be open sourced at a minimum in this
-manner (if not less restrictively!) so source code can be inspected directly by
-users and modified for their own personal benefit at a minimum. A motivation
-for the restritiveness is that the Software is also a test use case for
-https://increment.me and includes a link to users within the Software to
-provide feedback - and this protective license ensures that any feedback
-provided is associated with the Software as intended.
+development (although pull requests are welcome).
 
-If you would like to provide feedback on QuietKeys including on it's license,
-or obtain a custom license for your needs - please do! I'd welcome hearing
-from you and the best way to do so is to provide your information through the
+The developer believes applications like QuietKeys - which hook into end-user
+input devices (keyboard and microphone in this case) - should be open sourced
+at a minimum in this manner (if not less restrictively!) so source code can be
+inspected directly by users and modified for their own personal benefit at a
+minimum. A motivation for the restritiveness is that the Software is also a
+test use case for https://increment.me and includes a link to users within the
+Software to provide feedback - and this protective license ensures that any
+feedback provided is associated with the Software as intended.
+
+***Obtain a custom License or share Feedback: If you would like to provide
+feedback on QuietKeys including on it's license,
+or obtain a custom license for your needs - please do! I'd welcome hearing from
+you and the best way to do so is to provide your information through the
 QuietKeys topic on Increment at:
 
     https://www.increment.me/tw/feedback/feedback-about-quietkeys/
