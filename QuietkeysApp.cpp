@@ -1,9 +1,7 @@
 /*
-* QuietKeys / QuietKeysApp
-* Copyright (c) 2021 Increment, LLC
-**A tiny native win32/c++ app that mutes your default PC mic while you type (with a 2s delay when you're done)
-**Makes calls from your PC quieter (they can't hear you type!) without you needing to think about it.
-* License: See https://github.com/thomaswilley/quietkeysapp
+* QuietKeys (QuietkeysApp.cpp et al)
+* A tiny native win32/c++ app that mutes your default PC mic while you type (with a 2s delay when you're done)
+* Copyright (c) Thomas Willey 2021
 * Icons credit: https://getbootstrap.com
 */
 
@@ -32,11 +30,6 @@
 #define ICON_TYPING         3
 #define ICON_DISABLED_ERROR 4
 
-// Global Variables:
-HINSTANCE hInst;                                // current instance
-WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
-WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
-
 // forward declarations
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
@@ -47,7 +40,11 @@ void TypingIsHappening();
 void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defaultMicVolume);
 BOOL IsDarkThemeActive();
 
-// global namespace
+// globals
+HINSTANCE hInst;
+WCHAR szTitle[MAX_LOADSTRING];
+WCHAR szWindowClass[MAX_LOADSTRING];
+
 namespace gQuietKeys {
     bool disabled = false;
     HICON hIcon_mic;
@@ -500,7 +497,7 @@ void GetDefaultMic(wchar_t** defaultMicFriendlyName, IAudioEndpointVolume** defa
 void TypingIsHappening()
 {
     if (gQuietKeys::defaultMicVolume == nullptr) {
-        OutputDebugString(L"typing is happening, but the mic isn't registered. try restarting the app.");
+        //OutputDebugString(L"typing is happening, but the mic isn't registered. try restarting the app.");
         return;
     }
     if (gQuietKeys::mic_is_currently_muted == false) {
